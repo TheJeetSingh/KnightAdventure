@@ -1116,7 +1116,7 @@ export class MainScene extends Phaser.Scene {
     const completionText = this.add.text(
       this.cameras.main.centerX,
       this.cameras.main.centerY - 50,
-      'Tutorial Complete!',
+      'Level One Complete!',
       {
         fontFamily: 'PixelOperator8-Bold',
         fontSize: '64px',
