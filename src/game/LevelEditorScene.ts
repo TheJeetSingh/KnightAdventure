@@ -1,5 +1,7 @@
 import * as Phaser from 'phaser';
 
+type BlockCategory = 'terrain' | 'decorative' | 'special' | 'tree';
+
 export class LevelEditorScene extends Phaser.Scene {
   private blocks!: Phaser.Physics.Arcade.StaticGroup;
   private monsters!: Phaser.Physics.Arcade.Group;
@@ -14,17 +16,96 @@ export class LevelEditorScene extends Phaser.Scene {
   private commandModal!: Phaser.GameObjects.Container;
   private commandModalVisible: boolean = false;
   private isPlacingMonster: boolean = false;
+  private blockCategories: Record<BlockCategory, string[]> = {
+    terrain: [
+      'grass-on-dirt',
+      'dirt',
+      'ice-block',
+      'ice-on-stone',
+      'snow-on-deepslate',
+      'snow-on-ice',
+      'broken-stone',
+      'broken-sandy-block',
+      'normal-sandy-block',
+      'sandy-block',
+      'broken-snow',
+      'broken-blue-stone',
+      'broken-purple-stone',
+      'broken-yellow-stone',
+      'broken-copper',
+      'solid-copper',
+      'deepslate-broken'
+    ],
+    decorative: [
+      'wooden-crate',
+      'question-mark-crate',
+      'exclamation-mark-crate',
+      'green-mushroom',
+      'red-mushroom',
+      'pink-mushroom',
+      'yellow-mushroom',
+      'three-green-mushroom',
+      'three-red-mushroom',
+      'three-pink-mushroom',
+      'three-yellow-mushroom',
+      'daisy-bush',
+      'pumpkin',
+      'blue-glass-bottle',
+      'green-glass-bottle',
+      'purple-glass-bottle',
+      'yellow-glass-bottle',
+      'exclamation-mark-sign',
+      'people-sign'
+    ],
+    special: [
+      'water',
+      'water-head',
+      'lava',
+      'lava-head'
+    ],
+    tree: [
+      'tree-base',
+      'tree-middle',
+      'tree-middle-alternate',
+      'tree-almost-top',
+      'tree-top-left',
+      'tree-top-middle',
+      'tree-top-right'
+    ]
+  };
+  private currentCategory: BlockCategory = 'terrain';
+  private blockIndex: number = 0;
 
   constructor() {
     super({ key: 'LevelEditorScene' });
   }
 
   preload() {
-    // Load the same assets as MainScene
-    this.load.image('grass-on-dirt', '/assets/brackeys_platformer_assets/sprites/WorldBlocks/world_tileset/GrassOnDirt.png');
-    this.load.image('dirt', '/assets/brackeys_platformer_assets/sprites/WorldBlocks/world_tileset/Dirt.png');
+    // Load terrain blocks
+    this.blockCategories.terrain.forEach(block => {
+      const fileName = block.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join('');
+      this.load.image(block, `/assets/brackeys_platformer_assets/sprites/WorldBlocks/world_tileset/${fileName}.png`);
+    });
+
+    // Load decorative blocks
+    this.blockCategories.decorative.forEach(block => {
+      const fileName = block.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join('');
+      this.load.image(block, `/assets/brackeys_platformer_assets/sprites/WorldBlocks/world_tileset/${fileName}.png`);
+    });
+
+    // Load special blocks
+    this.blockCategories.special.forEach(block => {
+      const fileName = block.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join('');
+      this.load.image(block, `/assets/brackeys_platformer_assets/sprites/WorldBlocks/world_tileset/${fileName}.png`);
+    });
+
+    // Load tree blocks
+    this.blockCategories.tree.forEach(block => {
+      const fileName = block.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join('');
+      this.load.image(block, `/assets/brackeys_platformer_assets/sprites/WorldBlocks/world_tileset/${fileName}.png`);
+    });
     
-    // Load monster sprite with correct path
+    // Load monster sprite
     this.load.image('monster', '/assets/brackeys_platformer_assets/sprites/Monsters/slime_green/AttackOne.png');
   }
 
@@ -45,23 +126,31 @@ export class LevelEditorScene extends Phaser.Scene {
       .setOrigin(0);
     this.commandModal.add(modalBg);
 
-    const modalText = this.add.text(this.game.canvas.width / 2, this.game.canvas.height / 2 - 120,
+    const modalText = this.add.text(this.game.canvas.width / 2, this.game.canvas.height / 2 - 200,
       'Command Menu', { fontSize: '40px', color: '#fff' }).setOrigin(0.5);
     this.commandModal.add(modalText);
 
     const instructions = [
-      '1: Grass Block',
-      '2: Dirt Block',
-      '3: Monster',
+      'Block Categories:',
+      '1: Terrain Blocks',
+      '2: Decorative Blocks',
+      '3: Special Blocks',
+      '4: Tree Blocks',
+      '5: Monster',
+      '',
+      'Controls:',
+      'Left/Right Arrow: Cycle through blocks in category',
       'Left Click: Place Block/Monster',
       'Right Click: Remove Block/Monster',
       'S: Save Level',
       'Q / Esc: Close Menu',
-      'M: Back to Menu'
+      'M: Back to Menu',
+      '',
+      `Current Block: ${this.currentBlockType}`
     ];
 
     instructions.forEach((line, idx) => {
-      const txt = this.add.text(this.game.canvas.width / 2, this.game.canvas.height / 2 - 60 + idx * 30, line,
+      const txt = this.add.text(this.game.canvas.width / 2, this.game.canvas.height / 2 - 140 + idx * 30, line,
         { fontSize: '24px', color: '#fff' }).setOrigin(0.5);
       this.commandModal.add(txt);
     });
@@ -146,9 +235,19 @@ export class LevelEditorScene extends Phaser.Scene {
             .setOrigin(0, 0)
             .refreshBody();
           
-          if (this.currentBlockType === 'grass-on-dirt') {
-            const body = block.body as Phaser.Physics.Arcade.StaticBody;
-            if (body) {
+          // Set collision boxes based on block type
+          const body = block.body as Phaser.Physics.Arcade.StaticBody;
+          if (body) {
+            if (this.currentBlockType === 'grass-on-dirt') {
+              body.setSize(this.blockSize - 2, 8).setOffset(1, 12);
+            } else if (this.blockCategories.decorative.includes(this.currentBlockType)) {
+              // Make decorative blocks non-collidable
+              body.enable = false;
+            } else if (this.blockCategories.special.includes(this.currentBlockType)) {
+              // Special blocks like water and lava should be non-collidable
+              body.enable = false;
+            } else {
+              // Default collision box for terrain blocks
               body.setSize(this.blockSize, this.blockSize).setOffset(0, 0);
             }
           }
@@ -161,18 +260,59 @@ export class LevelEditorScene extends Phaser.Scene {
     // Handle keyboard input
     const keyboard = this.input.keyboard;
     if (keyboard) {
+      // Category selection
       keyboard.on('keydown-ONE', () => {
-        this.currentBlockType = 'grass-on-dirt';
+        this.currentCategory = 'terrain';
+        this.blockIndex = 0;
+        this.currentBlockType = this.blockCategories[this.currentCategory][this.blockIndex];
         this.isPlacingMonster = false;
+        this.updateInstructions();
       });
 
       keyboard.on('keydown-TWO', () => {
-        this.currentBlockType = 'dirt';
+        this.currentCategory = 'decorative';
+        this.blockIndex = 0;
+        this.currentBlockType = this.blockCategories[this.currentCategory][this.blockIndex];
         this.isPlacingMonster = false;
+        this.updateInstructions();
       });
 
       keyboard.on('keydown-THREE', () => {
+        this.currentCategory = 'special';
+        this.blockIndex = 0;
+        this.currentBlockType = this.blockCategories[this.currentCategory][this.blockIndex];
+        this.isPlacingMonster = false;
+        this.updateInstructions();
+      });
+
+      keyboard.on('keydown-FOUR', () => {
+        this.currentCategory = 'tree';
+        this.blockIndex = 0;
+        this.currentBlockType = this.blockCategories[this.currentCategory][this.blockIndex];
+        this.isPlacingMonster = false;
+        this.updateInstructions();
+      });
+
+      keyboard.on('keydown-FIVE', () => {
         this.isPlacingMonster = true;
+        this.updateInstructions();
+      });
+
+      // Block cycling
+      keyboard.on('keydown-LEFT', () => {
+        if (!this.isPlacingMonster && !this.commandModalVisible) {
+          this.blockIndex = (this.blockIndex - 1 + this.blockCategories[this.currentCategory].length) % this.blockCategories[this.currentCategory].length;
+          this.currentBlockType = this.blockCategories[this.currentCategory][this.blockIndex];
+          this.updateInstructions();
+        }
+      });
+
+      keyboard.on('keydown-RIGHT', () => {
+        if (!this.isPlacingMonster && !this.commandModalVisible) {
+          this.blockIndex = (this.blockIndex + 1) % this.blockCategories[this.currentCategory].length;
+          this.currentBlockType = this.blockCategories[this.currentCategory][this.blockIndex];
+          this.updateInstructions();
+        }
       });
 
       keyboard.on('keydown-S', () => {
@@ -194,6 +334,28 @@ export class LevelEditorScene extends Phaser.Scene {
         if (this.commandModalVisible) this.scene.start('StartScene');
       });
     }
+
+    // Add current block/category display
+    this.uiText = this.add.text(10, 10, '', { fontSize: '20px', color: '#fff', backgroundColor: '#000' });
+    this.updateInstructions();
+  }
+
+  private toggleCommandModal() {
+    this.commandModalVisible = !this.commandModalVisible;
+    this.commandModal.setVisible(this.commandModalVisible);
+  }
+
+  private updateInstructions() {
+    const text = this.isPlacingMonster
+      ? 'Current: Monster'
+      : `Category: ${this.currentCategory}, Block: ${this.currentBlockType}`;
+    this.uiText.setText(text);
+
+    // Update modal instructions if visible
+    if (this.commandModalVisible) {
+      const instructions = this.commandModal.list[this.commandModal.list.length - 1] as Phaser.GameObjects.Text;
+      instructions.setText(`Current Block: ${this.isPlacingMonster ? 'Monster' : this.currentBlockType}`);
+    }
   }
 
   private exportLevel() {
@@ -212,23 +374,6 @@ export class LevelEditorScene extends Phaser.Scene {
         y: monster.y / this.blockSize
       }))
     };
-
-    // Create all blocks
-    levelData.blocks.forEach(block => {
-      const x = block.x * this.blockSize;
-      const y = block.y * this.blockSize;
-      const blockSprite = this.blocks.create(x, y, block.type);
-      blockSprite.setScale(this.blockScale).setOrigin(0, 0).refreshBody();
-      
-      // Set proper collision box for grass blocks
-      if (block.type === 'grass-on-dirt') {
-        const body = blockSprite.body as Phaser.Physics.Arcade.StaticBody;
-        if (body) {
-          body.setSize(this.blockSize - 2, this.blockSize)
-            .setOffset(1, 0);
-        }
-      }
-    });
 
     // Create JSON file for download
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
@@ -255,18 +400,14 @@ export class LevelEditorScene extends Phaser.Scene {
     .setOrigin(0.5)
     .setDepth(2000);
 
-    // Fade out the message
-    this.tweens.add({
-      targets: message,
-      alpha: 0,
-      duration: 2000,
-      ease: 'Power2',
-      onComplete: () => message.destroy()
+    // Fade out and destroy the message after 2 seconds
+    this.time.delayedCall(2000, () => {
+      this.tweens.add({
+        targets: message,
+        alpha: 0,
+        duration: 500,
+        onComplete: () => message.destroy()
+      });
     });
-  }
-
-  private toggleCommandModal() {
-    this.commandModalVisible = !this.commandModalVisible;
-    this.commandModal.setVisible(this.commandModalVisible);
   }
 } 
