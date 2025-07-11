@@ -141,11 +141,11 @@ export class MainScene extends Phaser.Scene {
       this.player = undefined;
     }
     
-    // Add Tutorial Level text
+    // Add First Level text
     const levelText = this.add.text(
       this.cameras.main.centerX,
       40, // Position at the top of the screen
-      'Tutorial Level',
+      'First Level',
       {
         fontFamily: 'PixelOperator8',
         fontSize: '48px',
